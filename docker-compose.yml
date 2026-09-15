@@ -1,0 +1,107 @@
+name: caf2027-copilot
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: caf2027-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-caf_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-caf_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-caf2027}
+      # Prosleđuje se u init-rls.sh da app_user lozinka bude IZ .env,
+      # ne zakucana u SQL/shell fajlu — jedan izvor istine (CLAUDE.md
+      # Sekcija 3, pravilo 4: Security by Design).
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-change_me}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init-rls.sh:/docker-entrypoint-initdb.d/01-init-rls.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-caf_admin} -d ${POSTGRES_DB:-caf2027}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: caf2027-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    # MinIO je uklonio slike sa Docker Hub-a i preselio ih na quay.io.
+    # "minio/minio" na Docker Hub-u vraća "pull access denied" bez obzira
+    # na login/mrežu — ovo je jedini ispravan izvor slike od 2025/2026.
+    image: quay.io/minio/minio:latest
+    container_name: caf2027-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-caf_minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-caf_minio_dev_password}
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: caf2027-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Runtime: app_user (bez BYPASSRLS, bez DDL). Migracije: vlasnik baze.
+      DATABASE_URL: postgresql+asyncpg://${APP_DB_USER:-app_user}:${APP_DB_PASSWORD:-change_me}@postgres:5432/${POSTGRES_DB:-caf2027}
+      ADMIN_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-caf_admin}:${POSTGRES_PASSWORD:-caf_dev_password}@postgres:5432/${POSTGRES_DB:-caf2027}
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+    ports:
+      # 8000 je na Windows/Docker Desktop često u rezervisanom opsegu portova
+      # (WinError 10013) — backend zato izlaže 8765.
+      - "8765:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./backend/src:/app/src
+    command: uvicorn caf.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: caf2027-frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8765
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend/src:/app/src
+
+volumes:
+  postgres_data:
+  minio_data:

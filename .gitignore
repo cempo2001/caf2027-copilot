@@ -1,0 +1,30 @@
+# --- Secrets ---
+.env
+*.env.local
+
+# --- Python / backend ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Node / frontend ---
+node_modules/
+.next/
+out/
+next-env.d.ts
+
+# --- Docker / infra ---
+*.log
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Editor ---
+.vscode/
+.idea/
