@@ -58,6 +58,19 @@ services:
       timeout: 5s
       retries: 10
 
+  clamav:
+    # Antivirus za dokaze (CLAUDE.md 7.6). Prvi start preuzima potpise i
+    # traje nekoliko minuta (ugrađen healthcheck ima start-period 6m).
+    # Traži najmanje ~3 GB RAM-a za Docker (preporuka ClamAV-a: 4 GB).
+    # Backend je fail-closed: dok clamd nije spreman, upload vraća 503.
+    image: clamav/clamav:1.5
+    container_name: caf2027-clamav
+    restart: unless-stopped
+    ports:
+      - "3310:3310"
+    volumes:
+      - clamav_db:/var/lib/clamav
+
   backend:
     build:
       context: ./backend
@@ -72,6 +85,7 @@ services:
       ADMIN_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-caf_admin}:${POSTGRES_PASSWORD:-caf_dev_password}@postgres:5432/${POSTGRES_DB:-caf2027}
       REDIS_URL: redis://redis:6379/0
       MINIO_ENDPOINT: minio:9000
+      CLAMAV_HOST: clamav
     ports:
       # 8000 je na Windows/Docker Desktop često u rezervisanom opsegu portova
       # (WinError 10013) — backend zato izlaže 8765.
@@ -105,3 +119,4 @@ services:
 volumes:
   postgres_data:
   minio_data:
+  clamav_db:

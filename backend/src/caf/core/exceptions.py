@@ -87,3 +87,55 @@ class AiProviderUnavailableError(CafDomainError):
 
     i18n_key = "ai_provider_unavailable"
     status_code = 503
+
+
+class ConsensusNeedsEvidenceError(CafDomainError):
+    """422 — predlog ocjene (4.5) traži prethodno sačuvan tekst dokaza."""
+
+    i18n_key = "consensus_needs_evidence"
+    status_code = 422
+
+
+class EvidenceInfectedError(CafDomainError):
+    """422 — ClamAV je pronašao prijetnju; fajl se NE čuva (CLAUDE.md 7.6)."""
+
+    i18n_key = "evidence_infected"
+    status_code = 422
+
+
+class EvidenceTooLargeError(CafDomainError):
+    """422 — fajl prelazi MAX_EVIDENCE_BYTES."""
+
+    i18n_key = "evidence_too_large"
+    status_code = 422
+
+
+class EvidenceTypeNotAllowedError(CafDomainError):
+    """422 — ekstenzija nije na listi dozvoljenih tipova dokaza."""
+
+    i18n_key = "evidence_type_not_allowed"
+    status_code = 422
+
+
+class AvScannerUnavailableError(CafDomainError):
+    """
+    503 — ClamAV nije dostupan. Fail-closed: bez skeniranja nema čuvanja
+    (CLAUDE.md 7.6 — "neuspješan sken = fajl odbijen, ne tiho zanemaren").
+    """
+
+    i18n_key = "av_scanner_unavailable"
+    status_code = 503
+
+
+class StorageUnavailableError(CafDomainError):
+    """503 — MinIO (dokazni trezor) nije dostupan."""
+
+    i18n_key = "storage_unavailable"
+    status_code = 503
+
+
+class InvalidInputError(CafDomainError):
+    """422 — poslovna validacija ulaza koju Pydantic šema ne može izraziti (npr. prazan fajl)."""
+
+    i18n_key = "validation_error"
+    status_code = 422

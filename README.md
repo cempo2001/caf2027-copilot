@@ -13,7 +13,11 @@ cp .env.example .env
 # Popuni .env. OBAVEZNO: DATABASE_URL (app_user, runtime) I ADMIN_DATABASE_URL
 # (caf_admin, samo za migracije) — dvije različite role, po dizajnu (ADR-0001).
 
-docker compose up -d postgres redis minio
+docker compose up -d postgres redis minio clamav
+# clamav: prvi start preuzima potpise (nekoliko minuta) i traži ~3–4 GB RAM-a
+# u Docker Desktop-u. Bez njega upload dokaza vraća 503 (fail-closed) — za
+# lokalni rad bez ClamAV-a postavi AV_SCAN_MODE=disabled u .env (fajl se
+# tada čuva kao "pending", nije verifikovan dokaz; u produkciji zabranjeno).
 
 cd backend
 python -m venv .venv && .venv\Scripts\activate     # Windows
@@ -26,6 +30,6 @@ uvicorn caf.main:app --reload --port 8765          # http://localhost:8765/api/d
 
 ## Status
 
-- **Faza:** 0 → zatvara se (baza, RLS, Approved Lock, auth, SAR API — sve testirano)
+- **Faza:** 1 — backend rute Faze 1 napisane: CIP (5), dokazi sa MinIO + ClamAV (6.1), AI/Consensus predlog sa Offline Math Fallback-om (4.5); migracija `0004`, testovi `tests/test_api_phase1.py` i `tests/test_phase1_units.py`
 - **Rok deploy-a:** najkasnije februar 2027 (obim: Faza 0 + Faza 1 — CLAUDE.md 4.0)
-- **Otvoreno prije Faze 1 UI-ja:** zvanični tekst 28 podkriterijuma (EIPA) u `subcriteria` tabelu
+- **Otvoreno:** izbor AI provajdera/modela (CLAUDE.md Sekcija 2 — do tada radi samo fallback); provjera naziva podkriterijuma (migracija 0003) naspram zvaničnog EIPA teksta; odvojen MinIO servisni nalog umjesto root naloga (Faza 5)

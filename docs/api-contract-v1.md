@@ -166,7 +166,9 @@ Ažurira jedan podkriterijum (Guided Wizard korak). **KRITIČNA RUTA** — mora 
 
 ### 4.5 `POST /api/v1/self-assessments/{sar_id}/subcriteria/{code}/ai-consensus`
 
-Poziva AI/Consensus Engine za predlog ocjene na osnovu unesenog teksta. **Vraća 200 čak i kad AI provider padne** — tada je `source: "fallback"` i status 503 dolazi kao header (`X-Consensus-Warning: ai_provider_unavailable`), ne kao HTTP greška koja blokira tok (CLAUDE.md Sekcija 6.2 — Offline Math Fallback je obavezan, ne opcioni error state).
+Predlog ocjene na osnovu **sačuvanog** teksta podkriterijuma (tijelo zahtjeva je prazno — prvo se sačuva unos preko 4.4). Ništa ne upisuje. **Vraća 200 čak i kad AI provider nije dostupan ili nije konfigurisan** — tada je `source: "fallback"` i dolazi header `X-Consensus-Warning: ai_provider_unavailable` (CLAUDE.md Sekcija 7.5 — Offline Math Fallback je obavezan, ne error state).
+
+**Offline Math Fallback (dopuna 16.9.2026):** deterministički, bez mreže. Za Enabler kriterijume (1–5) dokazni tekst se ocjenjuje po PDCA fazama (Plan, Do, Check, Act); za Rezultate (6–9) po dimenzijama mjerenje/trend/cilj/poređenje. Svaka faza/dimenzija dobija 1–5 prema broju prepoznatih indikatora (posebne liste za `me` i `en` — CLAUDE.md 6.1), `suggested_score` je zaokružena aritmetička sredina. Unos kraći od 20 riječi ograničava predlog na najviše 2. Tekst predloga ima oznake na jeziku sesije, a citirani korisnički unos ostaje na jeziku na kom je unesen (bez prevođenja).
 
 **Response 200:**
 ```json
@@ -174,9 +176,17 @@ Poziva AI/Consensus Engine za predlog ocjene na osnovu unesenog teksta. **Vraća
   "suggested_score": 3,
   "suggested_summary_text": "string",
   "source": "ai | fallback",
-  "requires_human_confirmation": true
+  "requires_human_confirmation": true,
+  "breakdown": { "plan": 4, "do": 3, "check": 2, "act": 1 }
 }
 ```
+`breakdown` (dopuna) — ocjena po fazi/dimenziji, radi transparentnosti predloga; ključevi za Rezultate su `measurement`, `trend`, `target`, `comparison`.
+
+**Errors:**
+- `409 sar_locked` — odobren SAR se ne ocjenjuje ponovo.
+- `403 insufficient_role` — samo uloge koje mijenjaju ocjene (Sponsor, CAFLead, CAETeamMember).
+- `404 not_found`, `422 unknown_subcriteria`.
+- `422 consensus_needs_evidence` — za podkriterijum još nije sačuvan tekst dokaza.
 
 Frontend MORA prikazati ovo kao predlog koji korisnik eksplicitno potvrđuje (human-in-the-loop, CLAUDE.md Sekcija 7.5) — ne upisuje se automatski u 4.4.
 
@@ -215,9 +225,29 @@ Approved Lock — samo `Sponsor` rola. Nepovratna akcija.
 }
 ```
 
+**Errors:** `404 not_found`. Vidljivo svim ulogama institucije (RLS).
+
 ### 5.2 `POST /api/v1/self-assessments/{sar_id}/cip`
 
-Kreira CIP stavku. Vraća 409 ako je roditeljski SAR zaključan (CIP se ne mijenja poslije Approved Lock-a u Fazi 1 — reviziju CIP-a posle zaključavanja rešava Faza 6+, van obima sada).
+Kreira CIP stavku (dopuna 16.9.2026 — tijelo i pravila). Nova stavka uvijek počinje sa `status: "planned"`.
+
+**Request:**
+```json
+{
+  "title_me": "string (1–300)",
+  "title_en": "string (1–300)",
+  "quadrant": "quick_win | strategic | fill_in | reconsider",
+  "as_is": "string (1–5000)",
+  "to_be": "string (1–5000)"
+}
+```
+
+**Response 201:** jedna stavka kao u 5.1.
+
+**Errors:**
+- `409 sar_locked` — roditeljski SAR je zaključan (CIP se ne mijenja poslije Approved Lock-a u Fazi 1 — revizija CIP-a posle zaključavanja je Faza 6+, van obima sada).
+- `403 insufficient_role` — samo Sponsor, CAFLead, CAETeamMember (Employee je read-only).
+- `404 not_found`, `422` validacija.
 
 ---
 
@@ -225,14 +255,23 @@ Kreira CIP stavku. Vraća 409 ako je roditeljski SAR zaključan (CIP se ne mijen
 
 ### 6.1 `POST /api/v1/self-assessments/{sar_id}/subcriteria/{code}/evidence`
 
-Multipart upload. Vault & Documents agent (CLAUDE.md Sekcija 7.6).
+Multipart upload, jedno polje: **`file`** (dopuna 16.9.2026). Vault & Documents agent (CLAUDE.md Sekcija 7.6).
+
+- Maksimalna veličina: 25 MB (`MAX_EVIDENCE_BYTES`).
+- Dozvoljene ekstenzije: `pdf, doc, docx, xls, xlsx, ppt, pptx, odt, ods, odp, txt, csv, png, jpg, jpeg`.
+- Redoslijed: veličina/tip → SHA-256 → ClamAV (clamd INSTREAM) → MinIO → upis u bazu. Ključ objekta u MinIO ne sadrži korisničko ime fajla.
+- **Fail-closed:** ako ClamAV nije dostupan, fajl se NE čuva (`503 av_scanner_unavailable`). Izuzetak samo za lokalni razvoj: `AV_SCAN_MODE=disabled` čuva fajl sa `av_scan_status: "pending"` (nije verifikovan dokaz); u `ENVIRONMENT=production` aplikacija odbija da se pokrene sa tim podešavanjem.
 
 **Response 201:**
 ```json
-{ "id": "uuid", "filename": "string", "sha256": "string", "av_scan_status": "clean | infected | pending" }
+{ "id": "uuid", "filename": "string", "sha256": "string", "av_scan_status": "clean | pending" }
 ```
 
-**Errors:** `409 sar_locked`, `422` ako fajl ne prođe ClamAV sken (`av_scan_status: infected` — fajl se NE čuva, odbija se odmah, ne tiho zanemaruje).
+**Errors:**
+- `409 sar_locked`, `403 insufficient_role` (Employee), `404 not_found`, `422 unknown_subcriteria`.
+- `422 evidence_infected` — ClamAV je pronašao prijetnju; fajl se NE čuva, odbija se odmah.
+- `422 evidence_too_large`, `422 evidence_type_not_allowed`, `422 validation_error` (prazan fajl / nedostaje polje).
+- `503 av_scanner_unavailable`, `503 storage_unavailable`.
 
 ---
 

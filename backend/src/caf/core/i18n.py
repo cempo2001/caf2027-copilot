@@ -53,6 +53,30 @@ _MESSAGES: dict[str, dict[Locale, str]] = {
         "me": "Nepoznata šifra podkriterijuma.",
         "en": "Unknown sub-criterion code.",
     },
+    "consensus_needs_evidence": {
+        "me": "Prvo sačuvajte tekst dokaza za ovaj podkriterijum, pa zatražite predlog ocjene.",
+        "en": "Save the evidence text for this sub-criterion first, then request a score suggestion.",
+    },
+    "evidence_infected": {
+        "me": "Antivirusna provjera je pronašla prijetnju u fajlu — fajl nije sačuvan.",
+        "en": "The antivirus scan found a threat in the file — the file was not saved.",
+    },
+    "evidence_too_large": {
+        "me": "Fajl je veći od dozvoljenih 25 MB.",
+        "en": "The file exceeds the 25 MB limit.",
+    },
+    "evidence_type_not_allowed": {
+        "me": "Ova vrsta fajla nije dozvoljena kao dokaz.",
+        "en": "This file type is not allowed as evidence.",
+    },
+    "av_scanner_unavailable": {
+        "me": "Antivirusna provjera trenutno nije dostupna — fajl nije sačuvan. Pokušajte kasnije.",
+        "en": "The antivirus scanner is currently unavailable — the file was not saved. Please try again later.",
+    },
+    "storage_unavailable": {
+        "me": "Skladište dokaza trenutno nije dostupno — fajl nije sačuvan. Pokušajte kasnije.",
+        "en": "The evidence storage is currently unavailable — the file was not saved. Please try again later.",
+    },
 }
 
 

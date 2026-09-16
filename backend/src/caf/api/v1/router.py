@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from caf.api.v1 import auth, institutions, self_assessments
+from caf.api.v1 import auth, cip, consensus, evidence, institutions, self_assessments
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -15,3 +15,6 @@ async def health_check() -> dict[str, str]:
 api_router.include_router(auth.router)
 api_router.include_router(institutions.router)
 api_router.include_router(self_assessments.router)
+api_router.include_router(consensus.router)
+api_router.include_router(cip.router)
+api_router.include_router(evidence.router)

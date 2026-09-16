@@ -10,6 +10,8 @@ from caf.models.user import RoleEnum, User
 from caf.models.subcriteria import Subcriteria
 from caf.models.self_assessment import SarStatus, SelfAssessment
 from caf.models.subcriteria_score import SubcriteriaScore
+from caf.models.cip_item import CipItem, CipQuadrant, CipStatus
+from caf.models.evidence_file import EvidenceFile, StoredAvStatus
 
 __all__ = [
     "Institution",
@@ -19,4 +21,9 @@ __all__ = [
     "SelfAssessment",
     "SarStatus",
     "SubcriteriaScore",
+    "CipItem",
+    "CipQuadrant",
+    "CipStatus",
+    "EvidenceFile",
+    "StoredAvStatus",
 ]

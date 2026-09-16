@@ -11,7 +11,7 @@ Database & Security Agent (CLAUDE.md Sekcija 8.2) je vlasnik ovog fajla.
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, RedisDsn
+from pydantic import Field, PostgresDsn, RedisDsn, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -61,6 +61,20 @@ class Settings(BaseSettings):
     minio_root_user: str = Field(...)
     minio_root_password: str = Field(...)
     minio_bucket_evidence: str = Field(default="caf-evidence")
+    # Lokalni docker-compose MinIO radi bez TLS-a; produkcija mora imati TLS.
+    minio_secure: bool = Field(default=False)
+
+    # --- Antivirus (ClamAV, clamd INSTREAM) — CLAUDE.md 7.6 ---
+    # "clamd": svaki fajl se skenira; skener nedostupan -> 503, fajl se NE čuva.
+    # "disabled": SAMO lokalni razvoj bez ClamAV-a — fajl se čuva kao
+    # `pending` (nije verifikovan dokaz). Zabranjeno u produkciji (validator).
+    av_scan_mode: Literal["clamd", "disabled"] = "clamd"
+    clamav_host: str = Field(default="localhost")
+    clamav_port: int = Field(default=3310, ge=1, le=65535)
+    clamav_timeout_seconds: float = Field(default=60.0, gt=0)
+
+    # --- Dokazi (api-contract-v1.md 6.1) ---
+    max_evidence_bytes: int = Field(default=25 * 1024 * 1024, gt=0)
 
     # --- JWT / Auth ---
     jwt_secret_key: str = Field(..., min_length=32)
@@ -79,6 +93,14 @@ class Settings(BaseSettings):
     # --- i18n (CLAUDE.md Sekcija 6) ---
     default_locale: Literal["me", "en"] = "me"
     supported_locales: str = Field(default="me,en")
+
+    @model_validator(mode="after")
+    def _forbid_unscanned_evidence_in_production(self) -> "Settings":
+        if self.environment == "production" and self.av_scan_mode != "clamd":
+            raise ValueError("AV_SCAN_MODE mora biti 'clamd' u produkciji (CLAUDE.md 7.6).")
+        if self.environment == "production" and not self.minio_secure:
+            raise ValueError("MINIO_SECURE mora biti true u produkciji (TLS do dokaznog trezora).")
+        return self
 
     @property
     def supported_locales_list(self) -> list[str]:

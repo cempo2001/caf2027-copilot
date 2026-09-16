@@ -5,8 +5,8 @@ Router je TANAK: validira ulaz (Pydantic), poziva servis, vraća DTO.
 Nema poslovne logike, nema SQL-a, nema hvatanja domenskih izuzetaka —
 to radi globalni handler u main.py (409/403/404/422).
 
-Rute 4.5 (ai-consensus), 5 (CIP) i 6 (evidence) NISU ovdje — Faza 1
-(CLAUDE.md 4.0: Faza 0 zatvara auth + SAR jezgro).
+Rute 4.5 (ai-consensus), 5 (CIP) i 6 (evidence) su u zasebnim routerima
+(`consensus.py`, `cip.py`, `evidence.py`) — isti prefiks, odvojeni moduli.
 """
 
 from typing import Annotated
