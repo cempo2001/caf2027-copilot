@@ -27,6 +27,28 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
+      # main.py instancira Settings() na nivou modula (app = create_app()),
+      # pa čak i testovi koji sami podižu testcontainers Postgres (i mock-uju
+      # storage/scanner/AI provider) zahtijevaju sintaksno validne vrijednosti
+      # pri importu. .env se namjerno ne commit-uje (CLAUDE.md 3.4) — ovo su
+      # CI-only placeholder vrijednosti, ne prave tajne, koriste se samo za
+      # Pydantic validaciju pri importu modula.
+      - name: Kreiraj .env za CI (placeholder vrijednosti, ne prave tajne)
+        working-directory: backend
+        run: |
+          cat > .env << 'ENV'
+          DATABASE_URL=postgresql+asyncpg://app_user:ci_only@localhost:5432/caf2027
+          ADMIN_DATABASE_URL=postgresql+asyncpg://caf_admin:ci_only@localhost:5432/caf2027
+          REDIS_URL=redis://localhost:6379/0
+          MINIO_ENDPOINT=localhost:9000
+          MINIO_ROOT_USER=ci_minio_admin
+          MINIO_ROOT_PASSWORD=ci_only_password
+          MINIO_SECURE=false
+          AV_SCAN_MODE=disabled
+          JWT_SECRET_KEY=ci_only_not_a_real_secret_00000000000000
+          ENVIRONMENT=development
+          ENV
+
       # testcontainers[postgres] sam podiže Postgres 16 preko Docker
       # socket-a runnera — nema potrebe za posebnim services: blokom.
       - name: pytest (jedinični + integracioni, RLS/Approved Lock)
