@@ -27,6 +27,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
+      # Fail loudly (ne tiho degradirano okruženje) ako email-validator
+      # nedostaje — ovo je regresija koja je ranije rušila backend na
+      # startup-u (ModuleNotFoundError) dok je bila prikrivena fallback
+      # instalacijom u Dockerfile-u. CLAUDE.md 3.3: eksplicitno hendlovanje
+      # grešaka, ne prećutno degradiranje.
+      - name: Provjeri email-validator zavisnost
+        working-directory: backend
+        run: python -c "import email_validator; print('email-validator OK:', email_validator.__version__)"
+
       # main.py instancira Settings() na nivou modula (app = create_app()),
       # pa čak i testovi koji sami podižu testcontainers Postgres (i mock-uju
       # storage/scanner/AI provider) zahtijevaju sintaksno validne vrijednosti
@@ -126,9 +135,24 @@ jobs:
         # Nema još posebnog /health endpoint-a (dodaje se u Fazi 5 uz
         # docker-compose healthcheck za backend/frontend) — /api/docs je
         # uvijek dostupan van produkcije (main.py), dovoljan je za CI wait.
+        # Eksplicitan fail ako servis ne odgovori u roku — ranije je petlja
+        # tiho nastavljala dalje i posle 60 neuspjelih pokušaja (CLAUDE.md
+        # 3.3: nema prećutnog nastavljanja preko neuspjeha).
         run: |
-          for i in $(seq 1 60); do curl -sf http://localhost:8765/api/docs && break || sleep 5; done
-          for i in $(seq 1 60); do curl -sf http://localhost:3000 && break || sleep 5; done
+          ok=0
+          for i in $(seq 1 60); do curl -sf http://localhost:8765/api/docs > /dev/null && { ok=1; break; }; sleep 5; done
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::Backend (http://localhost:8765/api/docs) nije odgovorio u 300s — vidi 'docker compose logs' u failure koraku."
+            docker compose logs backend
+            exit 1
+          fi
+          ok=0
+          for i in $(seq 1 60); do curl -sf http://localhost:3000 > /dev/null && { ok=1; break; }; sleep 5; done
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::Frontend (http://localhost:3000) nije odgovorio u 300s — vidi 'docker compose logs' u failure koraku."
+            docker compose logs frontend
+            exit 1
+          fi
 
       - name: Migracije baze (alembic.ini je u backend/, ADMIN_DATABASE_URL već u kontejneru)
         run: docker compose exec -T backend alembic upgrade head
@@ -144,6 +168,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
+
+      - name: Provjeri email-validator zavisnost
+        working-directory: backend
+        run: python -c "import email_validator; print('email-validator OK:', email_validator.__version__)"
 
       # next dev kompajlira svaku rutu pri prvom zahtjevu; na CI runneru to
       # može trajati duže od Playwright timeout-a (15s) — zagrijavamo rute.

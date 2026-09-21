@@ -7,12 +7,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir -e ".[dev]" \
-    || pip install --no-cache-dir fastapi uvicorn[standard] pydantic pydantic-settings \
-       sqlalchemy asyncpg alembic pyjwt redis minio python-multipart
-
 COPY src/ ./src/
 COPY alembic.ini ./
+
+RUN pip install --no-cache-dir -e ".[dev]"
 
 ENV PYTHONPATH=/app/src
 EXPOSE 8000
