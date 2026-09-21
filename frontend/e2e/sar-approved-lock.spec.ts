@@ -31,7 +31,13 @@ async function login(page: Page, lang: Lang, email: string, password: string): P
   await page.getByLabel(msg(lang, "Login", "passwordLabel"), { exact: true }).fill(password);
   await page.getByLabel(msg(lang, "Login", "languageLabel"), { exact: true }).selectOption(lang);
   await page.getByRole("button", { name: msg(lang, "Login", "submit"), exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/${lang}/dashboard$`));
+  // Duži timeout SAMO ovdje: prva prijava u CI-ju pogađa "cold start"
+  // kompilaciju Next.js Server Action-a u dev modu (next dev kompajlira na
+  // prvi poziv, ne unaprijed) — na GitHub-ovom 2-jezgarnom runneru to zna
+  // trajati duže od podrazumijevanog expect timeout-a (15s). Sve naredne
+  // provjere u testu koriste podrazumijevani timeout jer je ruta/akcija
+  // do tada već kompajlirana.
+  await expect(page).toHaveURL(new RegExp(`/${lang}/dashboard$`), { timeout: 45_000 });
   await expect(page.locator("html")).toHaveAttribute("lang", lang);
 }
 
