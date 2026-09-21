@@ -1,0 +1,135 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# CLAUDE.md 7.8: ništa ne ide u produkciju bez zelenog CI-ja. Ova tri posla
+# pokrivaju backend (pytest + RLS/Approved Lock), frontend (typecheck/lint/
+# build) i puni E2E tok (oba jezika) iz Faze 1.
+
+jobs:
+  backend:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instaliraj backend zavisnosti
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      # testcontainers[postgres] sam podiže Postgres 16 preko Docker
+      # socket-a runnera — nema potrebe za posebnim services: blokom.
+      - name: pytest (jedinični + integracioni, RLS/Approved Lock)
+        working-directory: backend
+        run: python -m pytest -v
+
+  frontend:
+    name: Frontend (typecheck / lint / build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: npm ci
+        working-directory: frontend
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Build (produkcioni)
+        working-directory: frontend
+        run: npm run build
+
+  e2e:
+    name: E2E (Playwright, me + en)
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Pripremi .env za docker compose
+        run: cp .env.example .env
+
+      # AV_SCAN_MODE=disabled samo ovdje: ClamAV preuzimanje potpisa na
+      # prvom pokretanju traje nekoliko minuta i usporava svaki CI run bez
+      # dodatne vrijednosti — fail-closed AV logika je već nezavisno
+      # pokrivena u backend/tests/test_phase1_units.py (lažni clamd server)
+      # i test_api_phase1.py (scanner-down-fails-closed). E2E test suite
+      # prepoznaje ovaj mod preko E2E_AV_DISABLED i provjerava "pending"
+      # status dokaza umjesto "clean".
+      - name: Podigni docker compose stack (bez ClamAV-a, radi brzine)
+        run: |
+          echo "AV_SCAN_MODE=disabled" >> .env
+          docker compose up -d --build postgres redis minio backend frontend
+
+      - name: Sačekaj da backend i frontend odgovore
+        # Nema još posebnog /health endpoint-a (dodaje se u Fazi 5 uz
+        # docker-compose healthcheck za backend/frontend) — /api/docs je
+        # uvijek dostupan van produkcije (main.py), dovoljan je za CI wait.
+        run: |
+          for i in $(seq 1 60); do curl -sf http://localhost:8765/api/docs && break || sleep 5; done
+          for i in $(seq 1 60); do curl -sf http://localhost:3000 && break || sleep 5; done
+
+      - name: Migracije baze (alembic.ini je u backend/, ADMIN_DATABASE_URL već u kontejneru)
+        run: docker compose exec -T backend alembic upgrade head
+
+      - name: Instaliraj frontend zavisnosti + Playwright Chromium
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Instaliraj backend zavisnosti (za seed_e2e.py)
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: E2E (Playwright, me + en)
+        working-directory: frontend
+        env:
+          E2E_AV_DISABLED: "1"
+        run: npm run test:e2e
+
+      - name: Playwright izvještaj (ako testovi padnu)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 14
+
+      - name: Docker logovi (ako testovi padnu)
+        if: failure()
+        run: docker compose logs
