@@ -145,6 +145,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
+      # next dev kompajlira svaku rutu pri prvom zahtjevu; na CI runneru to
+      # može trajati duže od Playwright timeout-a (15s) — zagrijavamo rute.
+      - name: Zagrij Next.js rute (dev kompilacija)
+        run: |
+          for lang in me en; do
+            for route in login dashboard cip wizard/1.1; do
+              curl -s -o /dev/null --max-time 120 "http://localhost:3000/$lang/$route" || true
+            done
+          done
+
       - name: E2E (Playwright, me + en)
         working-directory: frontend
         env:

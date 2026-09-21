@@ -8,8 +8,8 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Backend (FastAPI, port 8765 — vidi docker-compose.yml) je poseban servis;
-  // ovdje se ne proksira preko Next.js-a, api-client.ts gađa ga direktno preko
-  // NEXT_PUBLIC_API_URL da bi Server Actions i client fetch koristili istu bazu.
+  // ovdje se ne proksira preko Next.js-a. api-client.ts ga gađa direktno:
+  // API_URL (server-side, interna Docker mreža) ili NEXT_PUBLIC_API_URL.
   experimental: {
     serverActions: {
       // Upload dokaza (6.1) ide kroz Server Action; podrazumijevani limit je

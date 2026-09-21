@@ -108,7 +108,11 @@ services:
     container_name: caf2027-frontend
     restart: unless-stopped
     environment:
+      # Browser koristi NEXT_PUBLIC_API_URL (host port). Server Actions
+      # unutar OVOG kontejnera koriste API_URL (interna Docker mreža) —
+      # vidi napomenu u frontend/src/lib/api-client.ts.
       NEXT_PUBLIC_API_URL: http://localhost:8765
+      API_URL: http://backend:8000
     ports:
       - "3000:3000"
     depends_on:

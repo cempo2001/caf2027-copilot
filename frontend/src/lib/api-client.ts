@@ -11,8 +11,15 @@ import type { ApiErrorBody, ApiErrorCode } from "@/types/api";
  * (kasnije, ako zatreba) sa client komponente.
  */
 
+// API_URL (bez NEXT_PUBLIC_ prefiksa, dakle NIKAD u browser bundle-u) je za
+// server-side pozive (Server Actions/RSC) unutar Docker mreže, gdje
+// "localhost" pokazuje na sam kontejner, ne na backend servis — vidi
+// docker-compose.yml (frontend: API_URL=http://backend:8000). Van Docker-a
+// (lokalni `npm run dev`) API_URL nije postavljen pa se koristi
+// NEXT_PUBLIC_API_URL kao i do sada.
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "") ?? "http://localhost:8765";
+  (process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL)?.replace(/\/+$/, "") ??
+  "http://localhost:8765";
 
 const API_PREFIX = "/api/v1";
 
